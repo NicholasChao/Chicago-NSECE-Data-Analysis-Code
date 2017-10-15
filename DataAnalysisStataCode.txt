@@ -1,0 +1,472 @@
+//open full dataset (DS11)
+//This dataset contains survey data from the NSECE's household survey
+//in the Chicago Area.
+
+use "/Users/nickchao/Desktop/35519-0011-Data.dta"
+
+//establish (and clean up) control variables; we are going to control
+//for RACE and REGION in our analysis. Other major variables to consider 
+//controlling are income and poverty. We will not explicit control for these
+//variables, as their impacts on employment are part of our analysis.
+
+//Race variable
+
+replace HH_CHAR_RACE=. if HH_CHAR_RACE==-1
+tab HH_CHAR_RACE
+
+//Region
+
+tab HH_REGION
+//find that the south region (HH_REGION = 3) is the most populated so we
+//will hold region constant at HH_REGION = 3
+
+//CREATING OUR LABOR SUPPLY VARIABLES
+
+//Extensive labor supply:
+//create a dummy variable for employed parents versus unemployed parents
+
+gen parentEmployed=cond(HH_ECON_PARWORK >0,1,0)
+
+//Intensive labor supply:
+//clean up data on num hours works due to npc, and create intensive labor supply variable
+
+replace HHC_NPC_HRS_PRNTUNAV_1=. if HHC_NPC_HRS_PRNTUNAV_1==-2
+replace HHC_NPC_HRS_PRNTUNAV_2=. if HHC_NPC_HRS_PRNTUNAV_2==-2
+replace HHC_NPC_HRS_PRNTUNAV_3=. if HHC_NPC_HRS_PRNTUNAV_3==-2
+replace HHC_NPC_HRS_PRNTUNAV_4=. if HHC_NPC_HRS_PRNTUNAV_4==-2
+replace HHC_NPC_HRS_PRNTUNAV_5=. if HHC_NPC_HRS_PRNTUNAV_5==-2
+replace HHC_NPC_HRS_PRNTUNAV_6=. if HHC_NPC_HRS_PRNTUNAV_6==-2
+replace HHC_NPC_HRS_PRNTUNAV_7=. if HHC_NPC_HRS_PRNTUNAV_7==-2
+replace HHC_NPC_HRS_PRNTUNAV_8=. if HHC_NPC_HRS_PRNTUNAV_8==-2
+replace HHC_NPC_HRS_PRNTUNAV_9=. if HHC_NPC_HRS_PRNTUNAV_9==-2
+
+gen laborSupply = max(HHC_NPC_HRS_PRNTUNAV_1, HHC_NPC_HRS_PRNTUNAV_2, HHC_NPC_HRS_PRNTUNAV_3, HHC_NPC_HRS_PRNTUNAV_4, HHC_NPC_HRS_PRNTUNAV_5, HHC_NPC_HRS_PRNTUNAV_6, HHC_NPC_HRS_PRNTUNAV_7, HHC_NPC_HRS_PRNTUNAV_8, HHC_NPC_HRS_PRNTUNAV_9)
+//Will return -2 if no nonparental care was used, so need to assign them as missing values. 
+replace laborsupply=. if laborsupply==-2 
+
+//Data cleanup: remove DK/ref/NA responses to avoid skewing data
+replace HH_HHCOMP_RELATIONS_NONE=. if HH_HHCOMP_RELATIONS_NONE==-1 
+
+//Employment Gap between single and two-parent households
+
+//drop all HH with more than two parents
+
+keep if HH_HHCOMP_NUMPARENTS==1 |HH_HHCOMP_NUMPARENTS==2
+
+//EMPLOYMENT GAP BETWEEN SINGLE AND TWO PARENT BY INCOME
+
+//clean up income data
+replace HH_G3B_ESTINCOME =. if HH_G3B_ESTINCOME == 7
+
+
+//low income comparison (less than $1200 per month)
+svy: mean parentEmployed if HH_HHCOMP_NUMPARENTS==1 & HH_G3B_ESTINCOME==1
+svy: mean parentEmployed if HH_HHCOMP_NUMPARENTS==2 & HH_G3B_ESTINCOME==1
+//find about a 21% increase in employment for 2 parent households
+
+//$1200-$1999
+svy: mean parentEmployed if HH_HHCOMP_NUMPARENTS==1 & HH_G3B_ESTINCOME==2
+svy: mean parentEmployed if HH_HHCOMP_NUMPARENTS==2 & HH_G3B_ESTINCOME==2
+//find about a 23% increase in employment for 2 parent households
+
+//$2000-$2999
+svy: mean parentEmployed if HH_HHCOMP_NUMPARENTS==1 & HH_G3B_ESTINCOME==3
+svy: mean parentEmployed if HH_HHCOMP_NUMPARENTS==2 & HH_G3B_ESTINCOME==3
+//find about a 20% increase in employment for 2 parent households
+
+//$3000-$4199
+svy: mean parentEmployed if HH_HHCOMP_NUMPARENTS==1 & HH_G3B_ESTINCOME==4
+svy: mean parentEmployed if HH_HHCOMP_NUMPARENTS==2 & HH_G3B_ESTINCOME==4
+//find about a 25% increase in employment for 2 parent households
+
+//$4200-$5499
+svy: mean parentEmployed if HH_HHCOMP_NUMPARENTS==1 & HH_G3B_ESTINCOME==5
+svy: mean parentEmployed if HH_HHCOMP_NUMPARENTS==2 & HH_G3B_ESTINCOME==5
+//due to SE, its hard to extrapolate meaningful analysis
+
+//$5500+
+svy: mean parentEmployed if HH_HHCOMP_NUMPARENTS==1 & HH_G3B_ESTINCOME==6
+svy: mean parentEmployed if HH_HHCOMP_NUMPARENTS==2 & HH_G3B_ESTINCOME==6
+//due to SE, its hard to extrapolate meaningful analysis
+
+//as income goes up, the SE for single parent households grows due to smaller
+//sample sizes.
+
+//the analysis also shows that after reaching the threshold of $1200 per month,
+//employment in two parent households makes a major jump from around 71% to
+//over 90%. Single parent households do not see a statifically significant
+//jump from this threshold.
+
+//EMPLOYMENT GAP DIFFERENCE BY EDUCATIONAL ATTAINMENT
+
+gen otherAdults = cond(HH_RELATE_NOG | HH_HHCOMP_RELATIONS_NONE > 0, 1,0)
+//returns 1 if there are any adults in HH who are not parents of children, or partner of head of HH
+
+//non-weighted ttest just to check biased comparison: 
+ttest laborsupply if HH_HHCOMP_NUMPARENTS==1 , by(otherAdults) 
+
+svyset [pweight=HH_METH_WEIGHT] //Set appropriate weights 
+
+//Run weighted-mean tests to compare extensive labor supply (employment rate of single-parent HHs: Those with at least one other parent living in HH and those without. 
+svy: mean parentEmployed if HH_HHCOMP_NUMPARENTS==1 & otherAdults==0
+//result: .6432115 (.0149571) obsv: 2297
+svy: mean parentEmployed if HH_HHCOMP_NUMPARENTS==1 & otherAdults==1
+//result: .5898552 (.0158553) obsv: 2173
+
+//Run weighted-mean tests to compare intensive labor supply of single-parent HHs.
+svy: mean laborsupply if HH_HHCOMP_NUMPARENTS==1 & otherAdults==0  //show proportion (mean) of single parents employed who do not have at least one other adult in the HH
+//result:  24.27054 (.6705629)  obsv:2013
+svy: mean laborsupply if HH_HHCOMP_NUMPARENTS==1 & otherAdults==1  //show proportion (mean) of single parents employed who DO have at least one other adult in HH 
+//result: 20.69523 (.7025236) obsv:1818
+
+//Now with income controls (After-tax income in last month):
+//Less than $1200
+svy: mean laborsupply if HH_HHCOMP_NUMPARENTS==1 & otherAdults==0 & HH_G3B_ESTINCOME==1 
+svy: mean laborsupply if HH_HHCOMP_NUMPARENTS==1 & otherAdults==1 & HH_G3B_ESTINCOME==1 
+//result: 
+
+//$1200 to $1999
+svy: mean laborsupply if HH_HHCOMP_NUMPARENTS==1 & otherAdults==0 & HH_G3B_ESTINCOME==2 
+svy: mean laborsupply if HH_HHCOMP_NUMPARENTS==1 & otherAdults==1 & HH_G3B_ESTINCOME==2 
+//result: 
+
+//$2000 to $2999
+svy: mean laborsupply if HH_HHCOMP_NUMPARENTS==1 & otherAdults==0 & HH_G3B_ESTINCOME==3 
+svy: mean laborsupply if HH_HHCOMP_NUMPARENTS==1 & otherAdults==1 & HH_G3B_ESTINCOME==3 
+//result: 
+
+//$3000 to $4199
+svy: mean laborsupply if HH_HHCOMP_NUMPARENTS==1 & otherAdults==0 & HH_G3B_ESTINCOME==4 
+svy: mean laborsupply if HH_HHCOMP_NUMPARENTS==1 & otherAdults==1 & HH_G3B_ESTINCOME==4 
+//result: 
+
+//$4200 to $5499
+svy: mean laborsupply if HH_HHCOMP_NUMPARENTS==1 & otherAdults==0 & HH_G3B_ESTINCOME==5 
+svy: mean laborsupply if HH_HHCOMP_NUMPARENTS==1 & otherAdults==1 & HH_G3B_ESTINCOME==5 
+//result: 
+
+//$5500 or more
+svy: mean laborsupply if HH_HHCOMP_NUMPARENTS==1 & otherAdults==0 & HH_G3B_ESTINCOME==6
+svy: mean laborsupply if HH_HHCOMP_NUMPARENTS==1 & otherAdults==1 & HH_G3B_ESTINCOME==6 
+//result: 
+
+//DK/REF
+svy: mean laborsupply if HH_HHCOMP_NUMPARENTS==1 & otherAdults==0 & HH_G3B_ESTINCOME==7 
+svy: mean laborsupply if HH_HHCOMP_NUMPARENTS==1 & otherAdults==1 & HH_G3B_ESTINCOME==7 
+//result:
+
+//Control for race, region (area of Chicago), 
+
+//Region:
+svy: mean laborsupply if HH_HHCOMP_NUMPARENTS==1 & HH_REGION==1  & otherAdults==0 //Northeast
+svy: mean laborsupply if HH_HHCOMP_NUMPARENTS==1 & HH_REGION==2  & otherAdults==0 //Midwest
+svy: mean laborsupply if HH_HHCOMP_NUMPARENTS==1 & HH_REGION==3  & otherAdults==0 //South
+svy: mean laborsupply if HH_HHCOMP_NUMPARENTS==1 & HH_REGION==4  & otherAdults==0 //West
+
+svy: mean laborsupply if HH_HHCOMP_NUMPARENTS==1 & HH_REGION==1  & otherAdults==1 //Northeast
+svy: mean laborsupply if HH_HHCOMP_NUMPARENTS==1 & HH_REGION==2  & otherAdults==1 //Midwest
+svy: mean laborsupply if HH_HHCOMP_NUMPARENTS==1 & HH_REGION==3  & otherAdults==1 //South
+svy: mean laborsupply if HH_HHCOMP_NUMPARENTS==1 & HH_REGION==4  & otherAdults==1 //West
+//Result: No difference from general analysis: Lower lbrsply for hh with other adults. Didn't vary significantly by region. Less labor supply in general in West region to others, but difference in that region between adult andn no-adult hh not sig
+
+
+//ANOTHER ADULT IN THE HOUSEHOLD?
+
+gen otherAdults = cond(HH_RELATE_NOG | HH_HHCOMP_RELATIONS_NONE > 0, 1,0)
+//returns 1 if there are any adults in HH who are not parents of children, or partner of head of HH
+
+//non-weighted ttest just to check biased comparison: 
+ttest laborsupply if HH_HHCOMP_NUMPARENTS==1 , by(otherAdults) 
+
+svyset [pweight=HH_METH_WEIGHT] //Set appropriate weights 
+
+//Run weighted-mean tests to compare extensive labor supply (employment rate of single-parent HHs: Those with at least one other parent living in HH and those without. 
+svy: mean parentEmployed if HH_HHCOMP_NUMPARENTS==1 & otherAdults==0
+//result: .6432115 (.0149571) obsv: 2297
+svy: mean parentEmployed if HH_HHCOMP_NUMPARENTS==1 & otherAdults==1
+//result: .5898552 (.0158553) obsv: 2173
+
+//Run weighted-mean tests to compare intensive labor supply of single-parent HHs.
+svy: mean laborsupply if HH_HHCOMP_NUMPARENTS==1 & otherAdults==0  //show proportion (mean) of single parents employed who do not have at least one other adult in the HH
+//result:  24.27054 (.6705629)  obsv:2013
+svy: mean laborsupply if HH_HHCOMP_NUMPARENTS==1 & otherAdults==1  //show proportion (mean) of single parents employed who DO have at least one other adult in HH 
+//result: 20.69523 (.7025236) obsv:1818
+
+//Now with income controls (After-tax income in last month):
+//Less than $1200
+svy: mean laborsupply if HH_HHCOMP_NUMPARENTS==1 & otherAdults==0 & HH_G3B_ESTINCOME==1 
+svy: mean laborsupply if HH_HHCOMP_NUMPARENTS==1 & otherAdults==1 & HH_G3B_ESTINCOME==1 
+//result: 
+
+//$1200 to $1999
+svy: mean laborsupply if HH_HHCOMP_NUMPARENTS==1 & otherAdults==0 & HH_G3B_ESTINCOME==2 
+svy: mean laborsupply if HH_HHCOMP_NUMPARENTS==1 & otherAdults==1 & HH_G3B_ESTINCOME==2 
+//result: 
+
+//$2000 to $2999
+svy: mean laborsupply if HH_HHCOMP_NUMPARENTS==1 & otherAdults==0 & HH_G3B_ESTINCOME==3 
+svy: mean laborsupply if HH_HHCOMP_NUMPARENTS==1 & otherAdults==1 & HH_G3B_ESTINCOME==3 
+//result: 
+
+//$3000 to $4199
+svy: mean laborsupply if HH_HHCOMP_NUMPARENTS==1 & otherAdults==0 & HH_G3B_ESTINCOME==4 
+svy: mean laborsupply if HH_HHCOMP_NUMPARENTS==1 & otherAdults==1 & HH_G3B_ESTINCOME==4 
+//result: 
+
+//$4200 to $5499
+svy: mean laborsupply if HH_HHCOMP_NUMPARENTS==1 & otherAdults==0 & HH_G3B_ESTINCOME==5 
+svy: mean laborsupply if HH_HHCOMP_NUMPARENTS==1 & otherAdults==1 & HH_G3B_ESTINCOME==5 
+//result: 
+
+//$5500 or more
+svy: mean laborsupply if HH_HHCOMP_NUMPARENTS==1 & otherAdults==0 & HH_G3B_ESTINCOME==6
+svy: mean laborsupply if HH_HHCOMP_NUMPARENTS==1 & otherAdults==1 & HH_G3B_ESTINCOME==6 
+//result: 
+
+//DK/REF
+svy: mean laborsupply if HH_HHCOMP_NUMPARENTS==1 & otherAdults==0 & HH_G3B_ESTINCOME==7 
+svy: mean laborsupply if HH_HHCOMP_NUMPARENTS==1 & otherAdults==1 & HH_G3B_ESTINCOME==7 
+//result:
+
+//Control for race, region (area of Chicago), 
+
+//Region:
+svy: mean laborsupply if HH_HHCOMP_NUMPARENTS==1 & HH_REGION==1  & otherAdults==0 //Northeast
+svy: mean laborsupply if HH_HHCOMP_NUMPARENTS==1 & HH_REGION==2  & otherAdults==0 //Midwest
+svy: mean laborsupply if HH_HHCOMP_NUMPARENTS==1 & HH_REGION==3  & otherAdults==0 //South
+svy: mean laborsupply if HH_HHCOMP_NUMPARENTS==1 & HH_REGION==4  & otherAdults==0 //West
+
+svy: mean laborsupply if HH_HHCOMP_NUMPARENTS==1 & HH_REGION==1  & otherAdults==1 //Northeast
+svy: mean laborsupply if HH_HHCOMP_NUMPARENTS==1 & HH_REGION==2  & otherAdults==1 //Midwest
+svy: mean laborsupply if HH_HHCOMP_NUMPARENTS==1 & HH_REGION==3  & otherAdults==1 //South
+svy: mean laborsupply if HH_HHCOMP_NUMPARENTS==1 & HH_REGION==4  & otherAdults==1 //West
+//Result: No difference from general analysis: Lower lbrsply for hh with other adults. Didn't vary significantly by region. Less lbrsply in general in West region to others, but difference in that region between adult andn no-adult hh not sig
+
+//CHILDCARE AND SINGLE PARENT LABOR SUPPLY OUTCOMES
+
+//clean up data for HHC_AGE_X
+replace HHC_AGE_2 =. if HHC_AGE_2==-2
+replace HHC_AGE_3 =. if HHC_AGE_3==-2
+replace HHC_AGE_4 =. if HHC_AGE_4==-2
+
+//generate dummy variable for having a single child less than the age of 5 (this will
+//be used later to simplify comparisons between different types of childcare
+gen oneChildLessThan5 = cond(HHC_AGE_1 < 60 & HHC_AGE_2 >= 60 & HHC_AGE_3 >= 60 & HHC_AGE_4 >= 60, 1, 0)
+
+
+//For sake of this question, i'm treating nonparental care and childcare
+//as synonyms.
+
+//correlation with race and childcare use?
+svy: mean HH_ANY_NPTN_1 if HH_CHAR_RACE==1
+svy: mean HH_ANY_NPTN_1 if HH_CHAR_RACE==2
+svy: mean HH_ANY_NPTN_1 if HH_CHAR_RACE==9
+
+svy: mean headStart if headStartOrInd==1 & HH_CHAR_RACE==1
+svy: mean headStart if headStartOrInd==1 & HH_CHAR_RACE==2
+svy: mean headStart if headStartOrInd==1 & HH_CHAR_RACE==9
+
+
+//General employment of single parents using childcare versus those not using it
+
+//extensive labor supply:
+
+//whites
+svy: mean parentEmployed if HH_HHCOMP_NUMPARENTS==1 & HH_ANY_NPTN_1==1 & HH_CHAR_RACE==1
+svy: mean parentEmployed if HH_HHCOMP_NUMPARENTS==1 & HH_ANY_NPTN_1==0 & HH_CHAR_RACE==1
+
+//blacks
+svy: mean parentEmployed if HH_HHCOMP_NUMPARENTS==1 & HH_ANY_NPTN_1==1 & HH_CHAR_RACE==2
+svy: mean parentEmployed if HH_HHCOMP_NUMPARENTS==1 & HH_ANY_NPTN_1==0 & HH_CHAR_RACE==2
+
+//latinos
+svy: mean parentEmployed if HH_HHCOMP_NUMPARENTS==1 & HH_ANY_NPTN_1==1 & HH_CHAR_RACE==9
+svy: mean parentEmployed if HH_HHCOMP_NUMPARENTS==1 & HH_ANY_NPTN_1==0 & HH_CHAR_RACE==9
+
+//intensive labor supply:
+
+//whites
+svy: mean laborSupply if HH_HHCOMP_NUMPARENTS==1 & HH_ANY_NPTN_1==1 & HH_CHAR_RACE==1
+svy: mean laborSupply if HH_HHCOMP_NUMPARENTS==1 & HH_ANY_NPTN_1==0 & HH_CHAR_RACE==1
+
+//blacks
+svy: mean laborSupply if HH_HHCOMP_NUMPARENTS==1 & HH_ANY_NPTN_1==1 & HH_CHAR_RACE==2
+svy: mean laborSupply if HH_HHCOMP_NUMPARENTS==1 & HH_ANY_NPTN_1==0 & HH_CHAR_RACE==2
+
+//latinos
+svy: mean laborSupply if HH_HHCOMP_NUMPARENTS==1 & HH_ANY_NPTN_1==1 & HH_CHAR_RACE==9
+svy: mean laborSupply if HH_HHCOMP_NUMPARENTS==1 & HH_ANY_NPTN_1==0 & HH_CHAR_RACE==9
+
+//very drastic difference observed. Single parents using childcare 
+//see employment rates of around 69% while those not using childcare
+//report an abysmal 30% employment.
+
+//Does the type of childcare used matter?
+//Individuals vs Head Start
+
+
+//create dummies for Head Start use and Individual Provider use
+
+gen indProv=cond(HH_PTYPE_1<15, 1, 0)
+
+gen headStart=cond(HH_PTYPE_5==20, 1, 0)
+
+//narrow analytic sample to only HH using either Head Start or Individual Providers
+
+gen headStartOrInd=cond(indProv==1 | headStart==1, 1, 0)
+
+//compare averages, narrowing in on housholds with only 1 child in target age range to remove
+//complexities in cases where a parent may use different childcare types for
+//each of their children.
+
+//extensive labor supply:
+svy: mean parentEmployed if oneChildLessThan5==1 & HH_HHCOMP_NUMPARENTS==1 & headStartOrInd==1 & headStart==0
+svy: mean parentEmployed if oneChildLessThan5==1 & HH_HHCOMP_NUMPARENTS==1 & headStartOrInd==1 & headStart==1
+
+//whites
+svy: mean parentEmployed if oneChildLessThan5==1 & HH_HHCOMP_NUMPARENTS==1 & headStartOrInd==1 & headStart==0 & HH_CHAR_RACE==1
+svy: mean parentEmployed if oneChildLessThan5==1 & HH_HHCOMP_NUMPARENTS==1 & headStartOrInd==1 & headStart==1 & HH_CHAR_RACE==1
+
+//blacks
+svy: mean parentEmployed if oneChildLessThan5==1 & HH_HHCOMP_NUMPARENTS==1 & headStartOrInd==1 & headStart==0 & HH_CHAR_RACE==2
+svy: mean parentEmployed if oneChildLessThan5==1 & HH_HHCOMP_NUMPARENTS==1 & headStartOrInd==1 & headStart==1 & HH_CHAR_RACE==2
+
+//hispanics
+svy: mean parentEmployed if oneChildLessThan5==1 & HH_HHCOMP_NUMPARENTS==1 & headStartOrInd==1 & headStart==0 & HH_CHAR_RACE==9
+svy: mean parentEmployed if oneChildLessThan5==1 & HH_HHCOMP_NUMPARENTS==1 & headStartOrInd==1 & headStart==1 & HH_CHAR_RACE==9
+
+//intensive labor supply:
+svy: mean laborSupply if oneChildLessThan5==1 & HH_HHCOMP_NUMPARENTS==1 & headStartOrInd==1 & headStart==0
+svy: mean laborSupply if oneChildLessThan5==1 & HH_HHCOMP_NUMPARENTS==1 & headStartOrInd==1 & headStart==1
+
+//POVERTY AND SINGLE PARENT LABOR SUPPLY OUTCOMES
+//goal is to compare rich parent in poverty dense area to rich parent in less
+//poverty dense areas. also, the same but for a poor parent.
+
+//average employment for single parent living below poverty threshold
+
+svy: mean parentEmployed if HH_HHCOMP_NUMPARENTS==1 & HH_ECON_INCOME_POVRATCAT==1 & HH_COMM_POVERTY_DENSITY==3
+svy: mean parentEmployed if HH_HHCOMP_NUMPARENTS==1 & HH_ECON_INCOME_POVRATCAT==1 & HH_COMM_POVERTY_DENSITY==2
+svy: mean parentEmployed if HH_HHCOMP_NUMPARENTS==1 & HH_ECON_INCOME_POVRATCAT==1 & HH_COMM_POVERTY_DENSITY==1
+
+//1-2x
+svy: mean parentEmployed if HH_HHCOMP_NUMPARENTS==1 & HH_ECON_INCOME_POVRATCAT==2 & HH_COMM_POVERTY_DENSITY==3
+svy: mean parentEmployed if HH_HHCOMP_NUMPARENTS==1 & HH_ECON_INCOME_POVRATCAT==2 & HH_COMM_POVERTY_DENSITY==2
+svy: mean parentEmployed if HH_HHCOMP_NUMPARENTS==1 & HH_ECON_INCOME_POVRATCAT==2 & HH_COMM_POVERTY_DENSITY==1
+
+//2-3x
+svy: mean parentEmployed if HH_HHCOMP_NUMPARENTS==1 & HH_ECON_INCOME_POVRATCAT==3 & HH_COMM_POVERTY_DENSITY==3
+svy: mean parentEmployed if HH_HHCOMP_NUMPARENTS==1 & HH_ECON_INCOME_POVRATCAT==3 & HH_COMM_POVERTY_DENSITY==2
+svy: mean parentEmployed if HH_HHCOMP_NUMPARENTS==1 & HH_ECON_INCOME_POVRATCAT==3 & HH_COMM_POVERTY_DENSITY==1
+
+//3x or more
+svy: mean parentEmployed if HH_HHCOMP_NUMPARENTS==1 & HH_ECON_INCOME_POVRATCAT==4 & HH_COMM_POVERTY_DENSITY==3
+svy: mean parentEmployed if HH_HHCOMP_NUMPARENTS==1 & HH_ECON_INCOME_POVRATCAT==4 & HH_COMM_POVERTY_DENSITY==2
+svy: mean parentEmployed if HH_HHCOMP_NUMPARENTS==1 & HH_ECON_INCOME_POVRATCAT==4 & HH_COMM_POVERTY_DENSITY==1
+
+//weekly working hours for single parent living below poverty threshold
+
+svy: mean laborSupply if HH_HHCOMP_NUMPARENTS==1 & HH_ECON_INCOME_POVRATCAT==1 & HH_COMM_POVERTY_DENSITY==3
+svy: mean laborSupply if HH_HHCOMP_NUMPARENTS==1 & HH_ECON_INCOME_POVRATCAT==1 & HH_COMM_POVERTY_DENSITY==2
+svy: mean laborSupply if HH_HHCOMP_NUMPARENTS==1 & HH_ECON_INCOME_POVRATCAT==1 & HH_COMM_POVERTY_DENSITY==1
+
+//1-2x
+svy: mean laborSupply if HH_HHCOMP_NUMPARENTS==1 & HH_ECON_INCOME_POVRATCAT==2 & HH_COMM_POVERTY_DENSITY==3
+svy: mean laborSupply if HH_HHCOMP_NUMPARENTS==1 & HH_ECON_INCOME_POVRATCAT==2 & HH_COMM_POVERTY_DENSITY==2
+svy: mean laborSupply if HH_HHCOMP_NUMPARENTS==1 & HH_ECON_INCOME_POVRATCAT==2 & HH_COMM_POVERTY_DENSITY==1
+
+//2-3x
+svy: mean laborSupply if HH_HHCOMP_NUMPARENTS==1 & HH_ECON_INCOME_POVRATCAT==3 & HH_COMM_POVERTY_DENSITY==3
+svy: mean laborSupply if HH_HHCOMP_NUMPARENTS==1 & HH_ECON_INCOME_POVRATCAT==3 & HH_COMM_POVERTY_DENSITY==2
+svy: mean laborSupply if HH_HHCOMP_NUMPARENTS==1 & HH_ECON_INCOME_POVRATCAT==3 & HH_COMM_POVERTY_DENSITY==1
+
+//3x or more
+svy: mean laborSupply if HH_HHCOMP_NUMPARENTS==1 & HH_ECON_INCOME_POVRATCAT==4 & HH_COMM_POVERTY_DENSITY==3
+svy: mean laborSupply if HH_HHCOMP_NUMPARENTS==1 & HH_ECON_INCOME_POVRATCAT==4 & HH_COMM_POVERTY_DENSITY==2
+svy: mean laborSupply if HH_HHCOMP_NUMPARENTS==1 & HH_ECON_INCOME_POVRATCAT==4 & HH_COMM_POVERTY_DENSITY==1
+
+//EDUCATION ATTAINMENT AND SINGLE PARENT LABOR OUTCOMES
+
+//clean up data -- no data available for fathers education
+replace HH_MOMSCH_1=. if HH_MOMS_CH_1==8
+replace HH_MOMSCH_1=. if HH_MOMS_CH_1==9
+replace HH_MOMSCH_1=. if HH_MOMS_CH_1==-9
+
+//single mother employment across educational attaintment
+svy: mean parentEmployed if HH_HHCOMP_NUMPARENTS==1 & HH_RGENDER==2 & HH_MOMSCH_1==1
+svy: mean parentEmployed if HH_HHCOMP_NUMPARENTS==1 & HH_RGENDER==2 & HH_MOMSCH_1==3
+svy: mean parentEmployed if HH_HHCOMP_NUMPARENTS==1 & HH_RGENDER==2 & HH_MOMSCH_1==6
+svy: mean parentEmployed if HH_HHCOMP_NUMPARENTS==1 & HH_RGENDER==2 & HH_MOMSCH_1==7
+
+//working hours
+svy: mean laborSupply if HH_HHCOMP_NUMPARENTS==1 & HH_RGENDER==2 & HH_MOMSCH_1==1
+svy: mean laborSupply if HH_HHCOMP_NUMPARENTS==1 & HH_RGENDER==2 & HH_MOMSCH_1==3
+svy: mean laborSupply if HH_HHCOMP_NUMPARENTS==1 & HH_RGENDER==2 & HH_MOMSCH_1==6
+svy: mean laborSupply if HH_HHCOMP_NUMPARENTS==1 & HH_RGENDER==2 & HH_MOMSCH_1==7
+
+
+//GENDER AND SINGLE PARENT LABOR OUTCOMES
+
+
+ //First, clean up HH_RGENDER to remove those who didn't answer
+
+replace HH_RGENDER=. if HH_RGENDER == 3
+
+// part a
+
+//clean up income data
+
+replace HH_G3B_ESTINCOME =. if HH_G3B_ESTINCOME == 7
+
+//compare avg employment between HH_G3B_ESTINCOME=1-6
+
+//Gender = 1 --> Male, Gender = 2 --> Female
+
+//Mothers:
+
+svy: mean parentEmployed if HH_RGENDER==2 & HH_HHCOMP_NUMPARENTS==1 & HH_G3B_ESTINCOME==1
+svy: mean parentEmployed if HH_RGENDER==2 & HH_HHCOMP_NUMPARENTS==1 & HH_G3B_ESTINCOME==2
+svy: mean parentEmployed if HH_RGENDER==2 & HH_HHCOMP_NUMPARENTS==1 & HH_G3B_ESTINCOME==3
+svy: mean parentEmployed if HH_RGENDER==2 & HH_HHCOMP_NUMPARENTS==1 & HH_G3B_ESTINCOME==4
+svy: mean parentEmployed if HH_RGENDER==2 & HH_HHCOMP_NUMPARENTS==1 & HH_G3B_ESTINCOME==5
+svy: mean parentEmployed if HH_RGENDER==2 & HH_HHCOMP_NUMPARENTS==1 & HH_G3B_ESTINCOME==6
+
+
+
+//Fathers:
+
+svy: mean parentEmployed if HH_RGENDER==1 & HH_HHCOMP_NUMPARENTS==1 & HH_G3B_ESTINCOME==1
+svy: mean parentEmployed if HH_RGENDER==1 & HH_HHCOMP_NUMPARENTS==1 & HH_G3B_ESTINCOME==2
+svy: mean parentEmployed if HH_RGENDER==1 & HH_HHCOMP_NUMPARENTS==1 & HH_G3B_ESTINCOME==3
+svy: mean parentEmployed if HH_RGENDER==1 & HH_HHCOMP_NUMPARENTS==1 & HH_G3B_ESTINCOME==4
+svy: mean parentEmployed if HH_RGENDER==1 & HH_HHCOMP_NUMPARENTS==1 & HH_G3B_ESTINCOME==5
+svy: mean parentEmployed if HH_RGENDER==1 & HH_HHCOMP_NUMPARENTS==1 & HH_G3B_ESTINCOME==6
+//single fathers are shockingly rare, creating high standard of errors in most
+//of these measures. One conclusion that can be drawn is that, as a whole,
+//they have better employment rates than single mothers.
+
+//now, do same comparisons, but focus on intensive labor supply
+
+//mothers:
+
+svy: mean laborSupply if HH_RGENDER==2 & HH_HHCOMP_NUMPARENTS==1 & HH_G3B_ESTINCOME==1
+svy: mean laborSupply if HH_RGENDER==2 & HH_HHCOMP_NUMPARENTS==1 & HH_G3B_ESTINCOME==2
+svy: mean laborSupply if HH_RGENDER==2 & HH_HHCOMP_NUMPARENTS==1 & HH_G3B_ESTINCOME==3
+svy: mean laborSupply if HH_RGENDER==2 & HH_HHCOMP_NUMPARENTS==1 & HH_G3B_ESTINCOME==4
+svy: mean laborSupply if HH_RGENDER==2 & HH_HHCOMP_NUMPARENTS==1 & HH_G3B_ESTINCOME==5
+svy: mean laborSupply if HH_RGENDER==2 & HH_HHCOMP_NUMPARENTS==1 & HH_G3B_ESTINCOME==6
+
+//fathers:
+
+svy: mean laborSupply if HH_RGENDER==1 & HH_HHCOMP_NUMPARENTS==1 & HH_G3B_ESTINCOME==1
+svy: mean laborSupply if HH_RGENDER==1 & HH_HHCOMP_NUMPARENTS==1 & HH_G3B_ESTINCOME==2
+svy: mean laborSupply if HH_RGENDER==1 & HH_HHCOMP_NUMPARENTS==1 & HH_G3B_ESTINCOME==3
+svy: mean laborSupply if HH_RGENDER==1 & HH_HHCOMP_NUMPARENTS==1 & HH_G3B_ESTINCOME==4
+svy: mean laborSupply if HH_RGENDER==1 & HH_HHCOMP_NUMPARENTS==1 & HH_G3B_ESTINCOME==5
+svy: mean laborSupply if HH_RGENDER==1 & HH_HHCOMP_NUMPARENTS==1 & HH_G3B_ESTINCOME==6
+
+
+//Education -- missing data, but perhaps we can infer, based on above results 
+//on income and income's correlation with education, that the effects will be
+//similar.
+
